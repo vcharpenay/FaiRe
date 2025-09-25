@@ -1,0 +1,29 @@
+{
+    "metadata": {},
+    "pipeline": {
+        "model_kwargs": {
+            "embedding_dim": 10,
+            "constraints": "u",
+            "n": 1,
+            "scales": "xy"
+        },
+        "negative_sampler_kwargs": {
+            "num_negs_per_pos": 50
+        },
+        "training_kwargs": {
+            "num_epochs": 1000,
+            "batch_size": 512
+        },
+        "stopper": "early",
+        "stopper_kwargs": {
+            "patience": 10,
+            "relative_delta": 0.005,
+            "frequency": 10,
+            "metric": "inverse_harmonic_mean_rank"
+        },
+        "optimizer": "Adam",
+        "optimizer_kwargs": {
+            "lr": 0.1
+        }
+    }
+}
