@@ -16,8 +16,8 @@ models = (
 datasets = (
     Grid1,
     Grid2,
-    # Grid3,
-    # Grid4,
+    Grid3,
+    Grid4,
     # Random1,
 )
 
@@ -46,6 +46,6 @@ for m_cls in models:
         with open("results.tsv", "a") as f:
             f.write(f"{ds_name}\t{m_name}\t{hits_at_1:.3f}\t{hits_at_3:.3f}\t{hits_at_10:.3f}\n")
 
-        with open(f"xy_{ds_name}_{m_name}.tsv", "w") as f:
-            e = result.model.entity_representations[0]()
-            for x, y, ... in e: f.write(f"{x:.3f}\t{y:.3f}\n")
+        # with open(f"xy_{ds_name}_{m_name}.tsv", "w") as f:
+        #     e = result.model.entity_representations[0]()
+        #     for x, y, ... in e: f.write(f"{x:.3f}\t{y:.3f}\n")

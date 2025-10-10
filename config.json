@@ -3,7 +3,7 @@
     "pipeline": {
         "model_kwargs": {
             "embedding_dim": 10,
-            "constraints": "u",
+            "constraints": "uv",
             "n": 1,
             "scales": "xy"
         },

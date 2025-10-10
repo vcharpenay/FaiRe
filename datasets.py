@@ -4,6 +4,8 @@ from pykeen.datasets.base import PathDataset
 from os.path import exists
 from os import mkdir
 
+# TODO draw graph as tensor?
+
 def draw_graph(nb_entities, nb_rels, seed_nb=42):
     seed(seed_nb)
 
@@ -59,6 +61,11 @@ def save(filename, data):
             f.write(f"{s}\t{p}\t{o}\n")
 
 class GeneratedDataset(PathDataset):
+    """
+    The dataset has two separate components: G1, G2.
+    The training split contains G1 and all asserted triples of G2.
+    The validation and test splits contain the inferred triples of G2.
+    """
 
     name: str
 
@@ -82,18 +89,14 @@ class GeneratedDataset(PathDataset):
         None
 
     @classmethod
-    def generate(cls, *, sample_ratio = 0.25, **kwargs):
-        asserted, inferred = cls._generate(**kwargs)
+    def generate(cls, **kwargs):
+        g1, g2_asserted, g2_inferred = cls._generate(**kwargs)
 
-        sample_size = int(sample_ratio * len(inferred))
+        shuffle(g2_inferred)
 
-        test = sample(inferred, sample_size)
-
-        inferred = filter(inferred, test)
-        valid = sample(inferred, sample_size)
-
-        inferred = filter(inferred, valid)
-        train = asserted + inferred
+        train = g1 + g2_asserted
+        valid = g2_inferred[::2]
+        test = g2_inferred[1::2]
 
         if not exists("data"): mkdir("data")
         if not exists(f"data/{cls.name}"): mkdir(f"data/{cls.name}")
@@ -102,7 +105,48 @@ class GeneratedDataset(PathDataset):
         save(f"data/{cls.name}/valid.tsv", valid)
         save(f"data/{cls.name}/test.tsv", test)
 
-class Grid1(GeneratedDataset):
+class Grid(GeneratedDataset):
+
+    test_factor = 1
+
+    @classmethod
+    def _generate_cell(cls, i, j, length):
+        None
+    
+    @classmethod
+    def _index(cls, triples, length, offset):
+        return [
+            (i * length + j + offset, r, k * length + l + offset)
+            for ((i,j), r, (k,l)) in triples
+            if i < length and j < length and k < length and l < length
+        ]
+
+    @classmethod
+    def _generate(cls, length=20):
+        g1 = []
+        g2_asserted = []
+        g2_inferred = []
+
+        g1_length = length
+        g2_length = int(length * cls.test_factor)
+
+        for i in range(g1_length):
+            for j in range(g1_length):
+                asserted, inferred = cls._generate_cell(i, j)
+                g1 += cls._index(asserted, g1_length, 0)
+                g1 += cls._index(inferred, g1_length, 0)
+
+        offset = g1_length * g1_length
+
+        for i in range(g2_length):
+            for j in range(g2_length):
+                asserted, inferred = cls._generate_cell(i, j)
+                g2_asserted += cls._index(asserted, g2_length, offset)
+                g2_inferred += cls._index(inferred, g2_length, offset)
+
+        return g1, g2_asserted, g2_inferred
+
+class Grid1(Grid):
     """
     Single rule. The order of body atoms doesn't matter.
 
@@ -116,26 +160,23 @@ class Grid1(GeneratedDataset):
 
     name = "grid1"
 
+    test_factor = 0.5
+
     @classmethod
-    def _generate(cls, length=25):
-        asserted = []
-        inferred = []
+    def _generate_cell(cls, i, j):
+        cell = (i, j)
+        right = (i+1, j)
+        up = (i, j+1)
+        up_right = (i+1, j+1)
+        
+        return [
+            (cell, 0, right), # r
+            (cell, 1, up) # s
+        ], [
+            (cell, 2, up_right) # t
+        ]
 
-        for i in range(length):
-            for j in range(length):
-                cell = i * length + j
-                right = (i+1) * length + j
-                up = i * length + (j+1)
-                up_right = (i+1) * length + (j+1)
-
-                asserted.append((cell, 0, right)) # r
-                asserted.append((cell, 1, up)) # s
-                
-                inferred.append((cell, 2, up_right)) # t
-
-        return asserted, inferred
-
-class Grid2(GeneratedDataset):
+class Grid2(Grid):
     """
     Tree-structured rule base (body atoms are all distinct for a same head).
 
@@ -152,32 +193,27 @@ class Grid2(GeneratedDataset):
 
     name = "grid2"
 
+    test_factor = 1
+
     @classmethod
-    def _generate(cls, length=25):
-        asserted = []
-        inferred = []
+    def _generate_cell(cls, i, j):
+        cell = (i, j)
+        r_range = (2*i, j)
+        s_range = (i+1, 2*j + 1)
+        rp_range = (2*i, 2*j)
+        sp_range = (i+1, j+1)
+        t_range = (2*i + 1, 2*j + 1)
 
-        i_max = length * length
+        return [
+            (cell, 0, r_range), # r
+            (cell, 1, s_range), # s
+            (cell, 2, rp_range), # r'
+            (cell, 3, sp_range) # s'
+        ], [
+            (cell, 4, t_range) # t
+        ]
 
-        for i in range(length):
-            for j in range(length):
-                cell = i * length + j
-                r_range = (2*i) * length + j
-                s_range = (i+1) * length + (2*j + 1)
-                rp_range = (2*i) * length + (2*j)
-                sp_range = (i+1) * length + (j+1)
-                t_range = (2*i + 1) * length + (2*j + 1)
-
-                if r_range <= i_max: asserted.append((cell, 0, r_range)) # r
-                if s_range <= i_max: asserted.append((cell, 1, s_range)) # s
-                if rp_range <= i_max: asserted.append((cell, 2, rp_range)) # r'
-                if sp_range <= i_max: asserted.append((cell, 3, sp_range)) # s'
-
-                if t_range <= i_max: inferred.append((cell, 4, t_range)) # t
-
-        return asserted, inferred
-
-class Grid3(GeneratedDataset):
+class Grid3(Grid):
     """
     Regular rule base (body atoms may be repeated for a same head).
 
@@ -195,34 +231,29 @@ class Grid3(GeneratedDataset):
 
     name = "grid3"
 
+    test_factor = 2
+
     @classmethod
-    def _generate(cls, length=25):
-        asserted = []
-        inferred = []
+    def _generate_cell(cls, i, j):
+        cell = (i, j)
+        r_range = (2*i, j)
+        s_range = (i+1, 4*j)
+        t_range = (i, j+1)
+        rp_range = (2*i, 2*j)
+        sp_range = (i+1, 2*j)
+        u_range = (2*i + 1, 4*j + 1)
 
-        i_max = length * length
+        return [
+            (cell, 0, r_range), # r
+            (cell, 1, s_range), # s
+            (cell, 2, t_range), # t
+            (cell, 3, rp_range), # r'
+            (cell, 4, sp_range) # s'
+        ], [
+            (cell, 5, u_range) # u
+        ]
 
-        for i in range(length):
-            for j in range(length):
-                cell = i * length + j
-                r_range = (2*i) * length + j
-                s_range = (i+1) * length + (4*j)
-                t_range = i * length + (j+1)
-                rp_range = (2*i) * length + (2*j)
-                sp_range = (i+1) * length + (2*j)
-                u_range = (2*i + 1) * length + (4*j + 1)
-
-                if r_range <= i_max: asserted.append((cell, 0, r_range)) # r
-                if s_range <= i_max: asserted.append((cell, 1, s_range)) # s
-                if t_range <= i_max: asserted.append((cell, 2, t_range)) # t
-                if rp_range <= i_max: asserted.append((cell, 3, rp_range)) # r'
-                if sp_range <= i_max: asserted.append((cell, 4, sp_range)) # s'
-
-                if u_range <= i_max: inferred.append((cell, 5, u_range)) # u
-
-        return asserted, inferred
-
-class Grid4(GeneratedDataset):
+class Grid4(Grid):
     """
     Non-regular acyclic rule base.
 
@@ -237,26 +268,23 @@ class Grid4(GeneratedDataset):
 
     name = "grid4"
 
+    test_factor = 0.5
+
     @classmethod
-    def _generate(cls, length=25):
-        asserted = []
-        inferred = []
+    def _generate_cell(cls, i, j):
+        cell = (i, j)
+        right = (i+1, j)
+        up = (i, j+1)
+        right_right = (i+2, j)
+        up_up = (i, j+2)
 
-        for i in range(length):
-            for j in range(length):
-                cell = i * length + j
-                right = (i+1) * length + j
-                up = i * length + (j+1)
-                right_right = (i+2) * length + j
-                up_up = i * length + (j+2)
-
-                asserted.append((cell, 0, right)) # r
-                asserted.append((cell, 1, up)) # t
-                
-                inferred.append((cell, 2, right_right)) # s
-                inferred.append((cell, 3, up_up)) # u
-
-        return asserted, inferred
+        return [
+            (cell, 0, right), # r
+            (cell, 1, up) # t
+        ], [
+            (cell, 2, right_right), # s
+            (cell, 3, up_up) # u
+        ]
 
 class Random1(GeneratedDataset):
     """
@@ -298,9 +326,11 @@ class Random1(GeneratedDataset):
         return asserted, inferred
 
 if __name__ == "__main__":
-    Grid1.generate()
-    Grid2.generate()
-    Grid3.generate()
+    # Grid1.generate()
+    # Grid2.generate()
+    # Grid3.generate()
     Grid4.generate()
 
-    Random1.generate()
+    # ratio = 0.25 # TODO as argument
+
+    # Random1.generate(sample_ratio=ratio)
