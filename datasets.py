@@ -1,6 +1,7 @@
 from random import random, randint, seed, shuffle
 from math import log, exp, pow
 from pykeen.datasets.base import PathDataset
+from pykeen.datasets.inductive import DisjointInductivePathDataset
 from os.path import exists
 from os import mkdir
 
@@ -60,7 +61,7 @@ def save(filename, data):
         for s, p, o in data:
             f.write(f"{s}\t{p}\t{o}\n")
 
-class GeneratedDataset(PathDataset):
+class GeneratedDataset(DisjointInductivePathDataset):
     """
     The dataset has two separate components: G1, G2.
     The training split contains G1 and all asserted triples of G2.
@@ -77,6 +78,7 @@ class GeneratedDataset(PathDataset):
     ):
         super().__init__(
             f"data/{self.name}/train.tsv",
+            f"data/{self.name}/inf.tsv",
             f"data/{self.name}/test.tsv",
             f"data/{self.name}/valid.tsv",
             eager,
@@ -94,7 +96,8 @@ class GeneratedDataset(PathDataset):
 
         shuffle(g2_inferred)
 
-        train = g1 + g2_asserted
+        train = g1
+        inf = g2_asserted
         valid = g2_inferred[::2]
         test = g2_inferred[1::2]
 
@@ -102,6 +105,7 @@ class GeneratedDataset(PathDataset):
         if not exists(f"data/{cls.name}"): mkdir(f"data/{cls.name}")
 
         save(f"data/{cls.name}/train.tsv", train)
+        save(f"data/{cls.name}/inf.tsv", inf)
         save(f"data/{cls.name}/valid.tsv", valid)
         save(f"data/{cls.name}/test.tsv", test)
 
@@ -122,7 +126,7 @@ class Grid(GeneratedDataset):
         ]
 
     @classmethod
-    def _generate(cls, length=20):
+    def _generate(cls, length=10):
         g1 = []
         g2_asserted = []
         g2_inferred = []
@@ -160,7 +164,7 @@ class Grid1(Grid):
 
     name = "grid1"
 
-    test_factor = 0.5
+    # test_factor = 0.5
 
     @classmethod
     def _generate_cell(cls, i, j):
@@ -193,7 +197,7 @@ class Grid2(Grid):
 
     name = "grid2"
 
-    test_factor = 1
+    # test_factor = 1
 
     @classmethod
     def _generate_cell(cls, i, j):
@@ -231,7 +235,7 @@ class Grid3(Grid):
 
     name = "grid3"
 
-    test_factor = 2
+    # test_factor = 2
 
     @classmethod
     def _generate_cell(cls, i, j):
@@ -268,7 +272,7 @@ class Grid4(Grid):
 
     name = "grid4"
 
-    test_factor = 0.5
+    # test_factor = 0.5
 
     @classmethod
     def _generate_cell(cls, i, j):
@@ -326,9 +330,9 @@ class Random1(GeneratedDataset):
         return asserted, inferred
 
 if __name__ == "__main__":
-    # Grid1.generate()
-    # Grid2.generate()
-    # Grid3.generate()
+    Grid1.generate()
+    Grid2.generate()
+    Grid3.generate()
     Grid4.generate()
 
     # ratio = 0.25 # TODO as argument

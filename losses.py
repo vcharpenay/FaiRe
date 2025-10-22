@@ -1,4 +1,4 @@
-from pykeen.losses import AdversarialLoss, apply_label_smoothing
+from pykeen.losses import AdversarialLoss, PointwiseLoss, apply_label_smoothing
 from torch import FloatTensor, ones_like, zeros_like, max
 from torch.nn.functional import binary_cross_entropy
 
@@ -52,4 +52,19 @@ class AdversarialBCEWithoutSigmoid(AdversarialLoss):
             # TODO: maybe we can make this more efficient?
             apply_label_smoothing(zeros_like(neg_scores), epsilon=label_smoothing, num_classes=num_entities),
             reduction="none",
+        )
+    
+class BCEWithoutSigmoid(PointwiseLoss):
+
+    def forward(
+        self,
+        x: FloatTensor,
+        target: FloatTensor,
+        weight: FloatTensor | None = None
+    ) -> FloatTensor:
+        return binary_cross_entropy(
+            x,
+            target,
+            reduction=self.reduction,
+            weight=weight
         )

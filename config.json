@@ -2,21 +2,24 @@
     "metadata": {},
     "pipeline": {
         "model_kwargs": {
-            "embedding_dim": 10,
+            "embedding_dim": 2,
             "constraints": "uv",
             "n": 1,
             "scales": "xy"
         },
         "negative_sampler_kwargs": {
-            "num_negs_per_pos": 50
+            "num_negs_per_pos": 99
         },
         "training_kwargs": {
             "num_epochs": 1000,
             "batch_size": 512
         },
+        "training_loop_kwargs": {
+            "automatic_memory_optimization": false
+        },
         "stopper": "early",
         "stopper_kwargs": {
-            "patience": 10,
+            "patience": 3,
             "relative_delta": 0.005,
             "frequency": 10,
             "metric": "inverse_harmonic_mean_rank"

@@ -1,9 +1,12 @@
-from torch import prod, cat
+from collections.abc import Sequence
+
+from torch import tensor, prod, cat, FloatTensor
 from torch.linalg import vector_norm
-from torch.nn.init import xavier_uniform_
+from torch.nn.init import xavier_uniform_, normal_
 
 from pykeen.nn import Embedding
 from pykeen.nn.modules import Interaction
+from pykeen.nn.representation import Representation
 from pykeen.models import ERModel
     
 def filter(constraints, a):
@@ -15,6 +18,14 @@ def filter(constraints, a):
     if "y" not in constraints: a[..., 3*d:, :] = float("-inf")
 
     return a
+
+class PretrainedInitializer:
+
+    def __init__(self, tensor: FloatTensor) -> None:
+        self.tensor = tensor
+
+    def __call__(self, x: FloatTensor) -> FloatTensor:
+        return self.tensor.clone()
 
 class NormInteraction(Interaction):
 
@@ -104,6 +115,7 @@ class UVXYModel(ERModel):
         self,
         *,
         interaction: Interaction,
+        r_pretrained: Sequence[Embedding] = None,
         embedding_dim: int = 40,
         n: int = 2,
         constraints: str = "uvxy",
@@ -128,6 +140,10 @@ class UVXYModel(ERModel):
                 shape=(n*4, embedding_dim)
             ),
         ]
+
+        if r_pretrained:
+            for args, rr in zip(r_kwargs, r_pretrained):
+                args["initializer"] = PretrainedInitializer(rr())
 
         super().__init__(
             interaction=interaction,
@@ -220,6 +236,7 @@ class SModel(ERModel):
         self,
         *,
         embedding_dim: int = 40,
+        r_pretrained: Sequence[Embedding] = None,
         scales: int = "x",
         n: int = 2,
         constraints: str = "uvxy",
@@ -240,6 +257,10 @@ class SModel(ERModel):
                 initializer=xavier_uniform_
             ),
         ]
+
+        if r_pretrained:
+            for args, rr in zip(r_kwargs, r_pretrained):
+                args["initializer"] = PretrainedInitializer(rr())
 
         super().__init__(
             interaction=SInteraction,
