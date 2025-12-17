@@ -1,6 +1,5 @@
 from random import random, randint, seed, shuffle
 from math import log, exp, pow
-from pykeen.datasets.base import PathDataset
 from pykeen.datasets.inductive import DisjointInductivePathDataset
 from os.path import exists
 from os import mkdir
@@ -148,6 +147,38 @@ class Grid(GeneratedDataset):
                 g2_asserted += cls._index(asserted, g2_length, offset)
                 g2_inferred += cls._index(inferred, g2_length, offset)
 
+        return g1, g2_asserted, g2_inferred, []
+
+class Lines(GeneratedDataset):
+
+    nb_vars = 3
+
+    test_factor = 1
+
+    @classmethod
+    def _generate_line(cls, l, *vars) -> int:
+        None, None
+
+    @classmethod
+    def _generate(cls, length=100):
+        g1 = []
+        g2_asserted = []
+        g2_inferred = []
+
+        for l in range(length):
+            vars = [l * cls.nb_vars + i for i in range(cls.nb_vars)]
+            asserted, inferred = cls._generate_line(l, *vars)
+            g1 += asserted
+            g1 += inferred
+
+        offset = length * cls.nb_vars
+
+        for l in range(offset, offset + length):
+            vars = [l * cls.nb_vars + i for i in range(cls.nb_vars)]
+            asserted, inferred = cls._generate_line(l, *vars)
+            g2_asserted += asserted
+            g2_inferred += inferred
+
         return g1, g2_asserted, g2_inferred
 
 class Grid1(Grid):
@@ -289,6 +320,91 @@ class Grid4(Grid):
             (cell, 2, right_right), # s
             (cell, 3, up_up) # u
         ]
+    
+class Lines1(Lines):
+    """
+    Same rules as Grid1.
+    """
+
+    name = "lines1"
+
+    @classmethod
+    def _generate_line(cls, l, x, y, z):
+        asserted1 = [
+            (x, 0, y), # r
+            (y, 1, z) # s
+        ]
+
+        asserted2 = [
+            (x, 1, y), # s
+            (y, 0, z) # r
+        ]
+
+        inferred = [ (x, 2, z) ] # t
+
+        return asserted1 if l % 2 else asserted2, inferred
+    
+class Lines2(Lines):
+    """
+    Same rules as Grid2.
+    """
+
+    nb_vars = 5
+
+    name = "lines2"
+
+    @classmethod
+    def _generate_line(cls, l, x, y1, z1, y2, z2):
+        asserted1 = [
+            (x, 0, y1), # r
+            (y1, 1, z1), # s
+            (x, 1, y2),
+            (y2, 0, z2)
+        ]
+
+        asserted2 = [
+            (x, 2, y1), # r'
+            (y1, 3, z1), # s'
+            (x, 3, y2),
+            (y2, 2, z2)
+        ]
+
+        inferred = [ (x, 4, z1) ] # t
+
+        return asserted1 if l % 2 else asserted2, inferred
+    
+class Lines3(Lines):
+    """
+    Same rules as Grid3.
+    """
+
+    nb_vars = 7
+
+    name = "lines3"
+
+    @classmethod
+    def _generate_line(cls, l, x, y1, y2, z1, y3, y4, z2):
+        asserted1 = [
+            (x, 0, y1), # r
+            (y1, 1, y2), # s
+            (y2, 2, z1), # t
+            (x, 2, y3),
+            (y3, 0, y4),
+            (y4, 1, z2)
+        ]
+
+        asserted2 = [
+            (x, 3, y1), # r'
+            (y1, 4, y2), # s'
+            (y2, 2, z1), # t
+            (x, 2, y3),
+            (y3, 3, y4),
+            (y4, 4, z2)
+        ]
+
+        inferred = [ (x, 5, z1) ] # u
+
+        return asserted1 if l % 2 else asserted2, inferred
 
 class Random1(GeneratedDataset):
     """
@@ -334,6 +450,10 @@ if __name__ == "__main__":
     Grid2.generate()
     Grid3.generate()
     Grid4.generate()
+
+    Lines1.generate()
+    Lines2.generate()
+    Lines3.generate()
 
     # ratio = 0.25 # TODO as argument
 

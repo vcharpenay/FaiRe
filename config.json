@@ -2,13 +2,13 @@
     "metadata": {},
     "pipeline": {
         "model_kwargs": {
-            "embedding_dim": 2,
-            "constraints": "uv",
+            "embedding_dim": 10,
+            "constraints": "u",
             "n": 1,
-            "scales": "xy"
+            "scales": "x"
         },
         "negative_sampler_kwargs": {
-            "num_negs_per_pos": 99
+            "num_negs_per_pos": 10
         },
         "training_kwargs": {
             "num_epochs": 1000,
@@ -22,7 +22,7 @@
             "patience": 3,
             "relative_delta": 0.005,
             "frequency": 10,
-            "metric": "inverse_harmonic_mean_rank"
+            "metric": "hits_at_1"
         },
         "optimizer": "Adam",
         "optimizer_kwargs": {
