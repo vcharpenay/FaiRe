@@ -6,7 +6,7 @@ from pykeen.evaluation import RankBasedEvaluator
 
 from losses import BCEWithoutSigmoid, AdversarialBCEWithoutSigmoid
 from models import UVXYModel, NormModel, ProductModel, SModel
-from datasets import Grid1, Grid2, Grid3, Grid4, Lines1, Lines2, Lines3, Random1
+from datasets import Grid1, Grid2, Grid3, Grid4, Lines1, Lines2, Lines3, Random1, CLUTTRLike
 from sampling import LocalNegativeSampler
 
 def save_xy(m, ds_name, split):
@@ -32,8 +32,8 @@ def save_r(m, ds_name, split):
 
 models = (
     # NormModel,
-    ProductModel,
-    # SModel,
+    # ProductModel,
+    SModel,
 )
 
 datasets = (
@@ -42,30 +42,106 @@ datasets = (
     # Grid3,
     # Grid4,
     # Lines1,
-    Lines2,
+    # Lines2,
     # Lines3,
     # Random1,
 )
+
+templates = {
+    # "rst": [
+    #     ("t", ("r", "s"), [ ("s", "r") ])
+    # ],
+    # "rstu_1": [
+    #     ("u", ("r", "s", "t"), [ ("t", "r", "s") ]),
+    #     ("u", ("r'", "s'", "t"), [ ("t", "r'", "s'") ])
+    # ],
+    # "rstu_2": [
+    #     ("u", ("r", "s", "t"), [ ("t", "s", "r") ]),
+    #     ("u", ("r'", "s'", "t"), [ ("t", "s'", "r'") ])
+    # ],
+    # "rstu_2_full": [
+    #     (
+    #         "u",
+    #         ("r", "s", "t"),
+    #         [
+    #             ("r",),
+    #             ("s",),
+    #             ("t",),
+    #             ("r", "s"),
+    #             ("s", "r"),
+    #             ("r", "t"),
+    #             ("t", "r"),
+    #             ("s", "t"),
+    #             ("t", "s"),
+    #             ("r", "t", "s"),
+    #             ("s", "r", "t"),
+    #             ("s", "t", "r"),
+    #             ("t", "s", "r"),
+    #             ("t", "r", "s")
+    #         ]
+    #     ),
+    #     (
+    #         "u",
+    #         ("r'", "s'", "t"),
+    #         [
+    #             ("r'", "s", "t"),
+    #             ("r", "s'", "t")
+    #         ]
+    #     )
+    # ],
+    # "rrst": [
+    #     ("t", ("r", "r", "s"), [ ("s",), ("s", "r") ]),
+    #     ("t", ("r", "s"), [ ("s",), ("s", "r") ])
+    # ],
+    "rrst_full": [
+        (
+            "t",
+            ("r", "r", "s"),
+            [
+                ("s",),
+                ("s", "r"),
+                ("s", "s", "r"),
+                ("s", "r", "r"),
+                ("r", "s", "r"),
+                ("r", "r", "r", "s")
+            ]
+        ),
+        (
+            "t",
+            ("r", "s"),
+            [
+                ("s",),
+                ("s", "r"),
+                ("s", "s", "r"),
+                ("s", "r", "r"),
+                ("r", "s", "r"),
+                ("r", "r", "r", "s")
+            ]
+        )
+    ]
+}
 
 with open("results.tsv", "a") as f:
     f.write(f"\n\n# {datetime.now().isoformat()}\n")
 
 for m_cls in models:
-    for ds_cls in datasets:
+    for ds_name, templates in templates.items():
         with open("config.json") as f: config = load(f)
-
-        ds_name = ds_cls.name
 
         config["pipeline"]["loss"] = AdversarialBCEWithoutSigmoid
         config["pipeline"]["model"] = m_cls
 
         # config["pipeline"]["negative_sampler"] = LocalNegativeSampler
 
-        ds = ds_cls(create_inverse_triples=True)
+        ds = CLUTTRLike(
+            sentence_templates=templates,
+            create_inverse_triples=False
+        )
+
         # TODO validation on a small subset / on inferrable triples?
-        config["pipeline"]["training"] = ds.transductive_training
-        config["pipeline"]["validation"] = ds.transductive_training
-        config["pipeline"]["testing"] = ds.transductive_training
+        config["pipeline"]["training"] = ds.training
+        config["pipeline"]["validation"] = ds.training
+        config["pipeline"]["testing"] = ds.training
 
         result: PipelineResult = pipeline_from_config(config)
 
@@ -77,7 +153,7 @@ for m_cls in models:
         margs = config["pipeline"]["model_kwargs"]
 
         m_inf = m_cls(
-            triples_factory=ds.inductive_inference,
+            triples_factory=ds.inference,
             r_pretrained=result.model.relation_representations,
             loss=AdversarialBCEWithoutSigmoid,
             **margs
@@ -88,9 +164,9 @@ for m_cls in models:
 
         config["pipeline"]["model"] = m_inf
 
-        config["pipeline"]["training"] = ds.inductive_inference
-        config["pipeline"]["validation"] = ds.inductive_validation
-        config["pipeline"]["testing"] = ds.inductive_testing
+        config["pipeline"]["training"] = ds.inference
+        config["pipeline"]["validation"] = ds.validation
+        config["pipeline"]["testing"] = ds.test
 
         result: PipelineResult = pipeline_from_config(config)
 
@@ -108,17 +184,22 @@ for m_cls in models:
         with open("results.tsv", "a") as f:
             f.write(f"{ds_name}\t{result.model.name}\t{hits_at_1:.3f}\t{hits_at_3:.3f}\t{hits_at_10:.3f}\n")
 
-        # results on false triples
+        with open(f"scores_{ds_name}_{result.model.name}.tsv", "w") as f:
+            for data in ds.sentences:
+                rel, comp_tpl, distractors = data["template"]
+                
+                pos = m_inf.score_hrt(data["inferred"])
+                neg = m_inf.score_hrt(data["not_inferred"])
 
-        # evaluator = RankBasedEvaluator()
-        # result = evaluator.evaluate(
-        #     model=m_inf,
-        #     mapped_triples=ds.inductive_testing_neg,
-        # )
+                neg = neg.reshape((-1, len(distractors)))
 
-        # hits_at_1 = result.get_metric("both.realistic.hits_at_1")
-        # hits_at_3 = result.get_metric("both.realistic.hits_at_3")
-        # hits_at_10 = result.get_metric("both.realistic.hits_at_10")
+                for pos_score, neg_scores in zip(pos, neg):
+                    p = pos_score.item()
+                    n = "\t".join([
+                        str(score)
+                        for score in neg_scores.tolist()
+                    ])
 
-        # with open("results.tsv", "a") as f:
-        #     f.write(f"{ds_name} (neg)\t{result.model.name}\t{hits_at_1:.3f}\t{hits_at_3:.3f}\t{hits_at_10:.3f}\n")
+                    f.write(f"{rel}\t{p}\t{n}\n")
+                        
+                f.write("\n\n")

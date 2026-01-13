@@ -3,9 +3,9 @@
     "pipeline": {
         "model_kwargs": {
             "embedding_dim": 10,
-            "constraints": "u",
+            "constraints": "v",
             "n": 1,
-            "scales": "x"
+            "scales": "xy"
         },
         "negative_sampler_kwargs": {
             "num_negs_per_pos": 10
