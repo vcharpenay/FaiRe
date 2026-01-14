@@ -5,22 +5,22 @@ from pykeen.pipeline import pipeline_from_config, PipelineResult
 from pykeen.evaluation import RankBasedEvaluator
 
 from losses import BCEWithoutSigmoid, AdversarialBCEWithoutSigmoid
-from models import UVXYModel, NormModel, ProductModel, SModel
+from models import UVXYModel, NormModel, ProductModel, SModel, PolygonModel, FFNModel
 from datasets import Grid1, Grid2, Grid3, Grid4, Lines1, Lines2, Lines3, Random1, CLUTTRLike
 from sampling import LocalNegativeSampler
 
-def save_xy(m, ds_name, split):
+def save_xy(run, m, ds_name, split):
     e_emb = m.entity_representations[0]()
 
     if e_emb.size(-1) == 2:
-        with open(f"xy_{ds_name}_{m.name}.{split}.tsv", "w") as f:
+        with open(f"xy_{ds_name}_{m.name}.{split}.{run}.tsv", "w") as f:
             for e in e_emb:
                 x = e[0]
                 y = e[1]
                 f.write(f"{x:.3f}\t{y:.3f}\n")
 
-def save_r(m, ds_name, split):
-    with open(f"r_{ds_name}_{m.name}.{split}.tsv", "w") as f:
+def save_r(run, m, ds_name, split):
+    with open(f"r_{ds_name}_{m.name}.{split}.{run}.tsv", "w") as f:
         for rr in m.relation_representations:
             r_emb = rr()
 
@@ -33,7 +33,9 @@ def save_r(m, ds_name, split):
 models = (
     # NormModel,
     # ProductModel,
-    SModel,
+    # SModel,
+    PolygonModel,
+    # FFNModel,
 )
 
 datasets = (
@@ -59,147 +61,151 @@ templates = {
     #     ("u", ("r", "s", "t"), [ ("t", "s", "r") ]),
     #     ("u", ("r'", "s'", "t"), [ ("t", "s'", "r'") ])
     # ],
-    # "rstu_2_full": [
-    #     (
-    #         "u",
-    #         ("r", "s", "t"),
-    #         [
-    #             ("r",),
-    #             ("s",),
-    #             ("t",),
-    #             ("r", "s"),
-    #             ("s", "r"),
-    #             ("r", "t"),
-    #             ("t", "r"),
-    #             ("s", "t"),
-    #             ("t", "s"),
-    #             ("r", "t", "s"),
-    #             ("s", "r", "t"),
-    #             ("s", "t", "r"),
-    #             ("t", "s", "r"),
-    #             ("t", "r", "s")
-    #         ]
-    #     ),
-    #     (
-    #         "u",
-    #         ("r'", "s'", "t"),
-    #         [
-    #             ("r'", "s", "t"),
-    #             ("r", "s'", "t")
-    #         ]
-    #     )
-    # ],
+    "rstu_2_full": [
+        (
+            "u",
+            ("r", "s", "t"),
+            [
+                ("r",),
+                ("s",),
+                ("t",),
+                ("r", "s"),
+                ("s", "r"),
+                ("r", "t"),
+                ("t", "r"),
+                ("s", "t"),
+                ("t", "s"),
+                ("r", "t", "s"),
+                ("s", "r", "t"),
+                ("s", "t", "r"),
+                ("t", "s", "r"),
+                ("t", "r", "s")
+            ]
+        ),
+        (
+            "u",
+            ("r'", "s'", "t"),
+            [
+                ("r'", "s", "t"),
+                ("r", "s'", "t")
+            ]
+        )
+    ],
     # "rrst": [
     #     ("t", ("r", "r", "s"), [ ("s",), ("s", "r") ]),
     #     ("t", ("r", "s"), [ ("s",), ("s", "r") ])
     # ],
-    "rrst_full": [
-        (
-            "t",
-            ("r", "r", "s"),
-            [
-                ("s",),
-                ("s", "r"),
-                ("s", "s", "r"),
-                ("s", "r", "r"),
-                ("r", "s", "r"),
-                ("r", "r", "r", "s")
-            ]
-        ),
-        (
-            "t",
-            ("r", "s"),
-            [
-                ("s",),
-                ("s", "r"),
-                ("s", "s", "r"),
-                ("s", "r", "r"),
-                ("r", "s", "r"),
-                ("r", "r", "r", "s")
-            ]
-        )
-    ]
+    # "rrst_full": [
+    #     (
+    #         "t",
+    #         ("r", "r", "s"),
+    #         [
+    #             ("s",),
+    #             ("s", "r"),
+    #             ("s", "s", "r"),
+    #             ("s", "r", "r"),
+    #             ("r", "s", "r"),
+    #             ("r", "r", "r", "s")
+    #         ]
+    #     ),
+    #     (
+    #         "t",
+    #         ("r", "s"),
+    #         [
+    #             ("s",),
+    #             ("s", "r"),
+    #             ("s", "s", "r"),
+    #             ("s", "r", "r"),
+    #             ("r", "s", "r"),
+    #             ("r", "r", "r", "s")
+    #         ]
+    #     )
+    # ]
 }
 
-with open("results.tsv", "a") as f:
-    f.write(f"\n\n# {datetime.now().isoformat()}\n")
+nb_runs = 1
+# nb_runs = 3
 
-for m_cls in models:
-    for ds_name, templates in templates.items():
-        with open("config.json") as f: config = load(f)
+for run in range(nb_runs):
+    with open("results.tsv", "a") as f:
+        f.write(f"\n\n# {datetime.now().isoformat()} (run #{run})\n")
 
-        config["pipeline"]["loss"] = AdversarialBCEWithoutSigmoid
-        config["pipeline"]["model"] = m_cls
+    for m_cls in models:
+        for ds_name, template_def in templates.items():
+            with open("config.json") as f: config = load(f)
 
-        # config["pipeline"]["negative_sampler"] = LocalNegativeSampler
+            config["pipeline"]["loss"] = AdversarialBCEWithoutSigmoid
+            config["pipeline"]["model"] = m_cls
 
-        ds = CLUTTRLike(
-            sentence_templates=templates,
-            create_inverse_triples=False
-        )
+            # config["pipeline"]["negative_sampler"] = LocalNegativeSampler
 
-        # TODO validation on a small subset / on inferrable triples?
-        config["pipeline"]["training"] = ds.training
-        config["pipeline"]["validation"] = ds.training
-        config["pipeline"]["testing"] = ds.training
+            ds = CLUTTRLike(
+                sentence_templates=template_def,
+                create_inverse_triples=False
+            )
 
-        result: PipelineResult = pipeline_from_config(config)
+            # TODO validation on a small subset / on inferrable triples?
+            config["pipeline"]["training"] = ds.training
+            config["pipeline"]["validation"] = ds.training
+            config["pipeline"]["testing"] = ds.training
 
-        save_xy(result.model, ds_name, "train")
-        save_r(result.model, ds_name, "train")
+            result: PipelineResult = pipeline_from_config(config)
 
-        # FIXME configs for scale/uvxy are mutually exclusive
+            save_xy(run, result.model, ds_name, "train")
+            save_r(run, result.model, ds_name, "train")
 
-        margs = config["pipeline"]["model_kwargs"]
+            # FIXME configs for scale/uvxy are mutually exclusive
 
-        m_inf = m_cls(
-            triples_factory=ds.inference,
-            r_pretrained=result.model.relation_representations,
-            loss=AdversarialBCEWithoutSigmoid,
-            **margs
-        )
+            margs = config["pipeline"]["model_kwargs"]
 
-        # no fine-tuning
-        for rr in m_inf.relation_representations: rr.requires_grad_(False)
+            m_inf = m_cls(
+                triples_factory=ds.inference,
+                r_pretrained=result.model.relation_representations,
+                loss=AdversarialBCEWithoutSigmoid,
+                **margs
+            )
 
-        config["pipeline"]["model"] = m_inf
+            # no fine-tuning
+            for rr in m_inf.relation_representations: rr.requires_grad_(False)
 
-        config["pipeline"]["training"] = ds.inference
-        config["pipeline"]["validation"] = ds.validation
-        config["pipeline"]["testing"] = ds.test
+            config["pipeline"]["model"] = m_inf
 
-        result: PipelineResult = pipeline_from_config(config)
+            config["pipeline"]["training"] = ds.inference
+            config["pipeline"]["validation"] = ds.validation
+            config["pipeline"]["testing"] = ds.test
 
-        save_xy(result.model, ds_name, "inf")
-        save_r(result.model, ds_name, "inf")
+            result: PipelineResult = pipeline_from_config(config)
 
-        # results on true triples
+            save_xy(run, result.model, ds_name, "inf")
+            save_r(run, result.model, ds_name, "inf")
 
-        hits_at_1 = result.get_metric("both.realistic.hits_at_1")
-        hits_at_3 = result.get_metric("both.realistic.hits_at_3")
-        hits_at_10 = result.get_metric("both.realistic.hits_at_10")
+            # results on true triples
 
-        # note: validation on "inverse_harmonic_mean_rank"?
+            hits_at_1 = result.get_metric("both.realistic.hits_at_1")
+            hits_at_3 = result.get_metric("both.realistic.hits_at_3")
+            hits_at_10 = result.get_metric("both.realistic.hits_at_10")
 
-        with open("results.tsv", "a") as f:
-            f.write(f"{ds_name}\t{result.model.name}\t{hits_at_1:.3f}\t{hits_at_3:.3f}\t{hits_at_10:.3f}\n")
+            # note: validation on "inverse_harmonic_mean_rank"?
 
-        with open(f"scores_{ds_name}_{result.model.name}.tsv", "w") as f:
-            for data in ds.sentences:
-                rel, comp_tpl, distractors = data["template"]
-                
-                pos = m_inf.score_hrt(data["inferred"])
-                neg = m_inf.score_hrt(data["not_inferred"])
+            with open("results.tsv", "a") as f:
+                f.write(f"{ds_name}\t{result.model.name}\t{hits_at_1:.3f}\t{hits_at_3:.3f}\t{hits_at_10:.3f}\n")
 
-                neg = neg.reshape((-1, len(distractors)))
+            with open(f"scores_{ds_name}_{result.model.name}.{run}.tsv", "w") as f:
+                for data in ds.sentences:
+                    rel, comp_tpl, distractors = data["template"]
+                    
+                    pos = m_inf.score_hrt(data["inferred"])
+                    neg = m_inf.score_hrt(data["not_inferred"])
 
-                for pos_score, neg_scores in zip(pos, neg):
-                    p = pos_score.item()
-                    n = "\t".join([
-                        str(score)
-                        for score in neg_scores.tolist()
-                    ])
+                    neg = neg.reshape((-1, len(distractors)))
 
-                    f.write(f"{rel}\t{p}\t{n}\n")
-                        
-                f.write("\n\n")
+                    for pos_score, neg_scores in zip(pos, neg):
+                        p = pos_score.item()
+                        n = "\t".join([
+                            str(score)
+                            for score in neg_scores.tolist()
+                        ])
+
+                        f.write(f"{rel}\t{p}\t{n}\n")
+                            
+                    f.write("\n\n")

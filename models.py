@@ -1,8 +1,8 @@
 from collections.abc import Sequence
 
-from torch import tensor, prod, cat, FloatTensor
+from torch import tensor, prod, cat, where, FloatTensor
 from torch.linalg import vector_norm
-from torch.nn.init import xavier_uniform_, normal_
+from torch.nn.init import xavier_uniform_, uniform_, normal_
 
 from pykeen.nn import Embedding
 from pykeen.nn.modules import Interaction
@@ -205,16 +205,16 @@ class SInteraction(Interaction):
         self.scales = scales
 
     def forward(self, h, r, t):
-        s, b = r
+        s, u = r
 
         sx, sy = s.tensor_split(2, dim=-2)
-        bx, by = b.tensor_split(2, dim=-2)
+        ux, uy = u.tensor_split(2, dim=-2)
 
         x = h.unsqueeze(-2)
         y = t.unsqueeze(-2)
 
-        dist_x = sx * x + y - bx
-        dist_y = sy * y + x - by
+        dist_x = sx * x + y - ux
+        dist_y = sy * y + x - uy
 
         dist_cat = []
         if "x" in self.scales: dist_cat.append(dist_x)
@@ -275,3 +275,143 @@ class SModel(ERModel):
         )
 
         self.name = scales + "_scale"
+
+class PolygonInteraction(Interaction):
+
+    def __init__(
+            self,
+    ):
+        super().__init__()
+
+        self.entity_shape = ("d",)
+        self.relation_shape = (("e", "d"), ("e", "d"))
+
+    def forward(self, h, r, t):
+        s, u = r
+
+        x = h.unsqueeze(-2)
+        y = t.unsqueeze(-2)
+
+        dist = s * x + y - u
+
+        dist_up, dist_down = dist.tensor_split(2, dim=-2)
+        dist_cat = cat((dist_up, -dist_down), dim=-2)
+
+        score = dist_cat.tanh().mean(dim=-2)
+        score = where(score > 0, score, 0) # ReLU (try GELU?)
+
+        return score.mean(dim=-1)
+
+class PolygonModel(ERModel):
+    
+    def __init__(
+        self,
+        *,
+        embedding_dim: int = 40,
+        r_pretrained: Sequence[Embedding] = None,
+        scales: int = 1,
+        n: int = 2,
+        constraints: str = "uvxy",
+        edges: int = 2,
+        **kwargs
+    ) -> None:
+        e_kwargs = dict(
+            embedding_dim=embedding_dim,
+            initializer=xavier_uniform_
+        )
+
+        r_kwargs = [
+            dict( # scale
+                shape=(2 * edges, embedding_dim),
+                initializer=uniform_,
+                initializer_kwargs=dict(a=-1, b=1)
+            ),
+            dict( # offset
+                shape=(2 * edges, embedding_dim),
+                initializer=xavier_uniform_
+            ),
+        ]
+
+        if r_pretrained:
+            for args, rr in zip(r_kwargs, r_pretrained):
+                args["initializer"] = PretrainedInitializer(rr())
+                args["initializer_kwargs"] = dict()
+
+        super().__init__(
+            interaction=PolygonInteraction,
+            entity_representations=Embedding,
+            entity_representations_kwargs=e_kwargs,
+            relation_representations=Embedding,
+            relation_representations_kwargs=r_kwargs,
+            **kwargs
+        )
+
+        self.name = str(edges) + "_poly"
+
+class FFNInteraction(Interaction):
+
+    def __init__(
+            self,
+    ):
+        super().__init__()
+
+        self.entity_shape = ("d",)
+        self.relation_shape = (("e", "h"), ("h", "f"), ("d",))
+
+    def forward(self, h, r, t):
+        w1, w2, b1 = r
+
+        ht = cat((h, t), dim=-1)
+        score = (w1 @ ht + b1).maximum(0) @ w2
+
+        return score
+
+class FFNModel(ERModel):
+
+    def __init__(
+        self,
+        *,
+        embedding_dim: int = 40,
+        r_pretrained: Sequence[Embedding] = None,
+        scales: int = 1,
+        n: int = 2,
+        constraints: str = "uvxy",
+        **kwargs
+    ) -> None:
+        e_kwargs = dict(
+            embedding_dim=embedding_dim,
+            initializer=xavier_uniform_
+        )
+
+        # TODO as arg
+        hidden_dim = 40
+
+        r_kwargs = [
+            dict( # w1
+                shape=(2 * embedding_dim, hidden_dim),
+                initializer=xavier_uniform_
+            ),
+            dict( # w2
+                shape=(hidden_dim, 1),
+                initializer=xavier_uniform_
+            ),
+            dict( # b1
+                shape=(hidden_dim),
+                initializer=xavier_uniform_
+            ),
+        ]
+
+        if r_pretrained:
+            for args, rr in zip(r_kwargs, r_pretrained):
+                args["initializer"] = PretrainedInitializer(rr())
+
+        super().__init__(
+            interaction=FFNInteraction,
+            entity_representations=Embedding,
+            entity_representations_kwargs=e_kwargs,
+            relation_representations=Embedding,
+            relation_representations_kwargs=r_kwargs,
+            **kwargs
+        )
+
+        self.name = "ffn"
