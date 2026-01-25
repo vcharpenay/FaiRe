@@ -5,7 +5,7 @@ from pykeen.pipeline import pipeline_from_config, PipelineResult
 from pykeen.evaluation import RankBasedEvaluator
 
 from losses import BCEWithoutSigmoid, AdversarialBCEWithoutSigmoid
-from models import UVXYModel, NormModel, ProductModel, SModel, PolygonModel, FFNModel
+from models import UVXYModel, NormModel, ProductModel, SModel, SWModel, PolygonModel, FFNModel
 from datasets import Grid1, Grid2, Grid3, Grid4, Lines1, Lines2, Lines3, Random1, CLUTTRLike
 from sampling import LocalNegativeSampler
 
@@ -34,6 +34,7 @@ models = (
     # NormModel,
     # ProductModel,
     # SModel,
+    # SWModel,
     PolygonModel,
     # FFNModel,
 )
@@ -61,66 +62,66 @@ templates = {
     #     ("u", ("r", "s", "t"), [ ("t", "s", "r") ]),
     #     ("u", ("r'", "s'", "t"), [ ("t", "s'", "r'") ])
     # ],
-    "rstu_2_full": [
-        (
-            "u",
-            ("r", "s", "t"),
-            [
-                ("r",),
-                ("s",),
-                ("t",),
-                ("r", "s"),
-                ("s", "r"),
-                ("r", "t"),
-                ("t", "r"),
-                ("s", "t"),
-                ("t", "s"),
-                ("r", "t", "s"),
-                ("s", "r", "t"),
-                ("s", "t", "r"),
-                ("t", "s", "r"),
-                ("t", "r", "s")
-            ]
-        ),
-        (
-            "u",
-            ("r'", "s'", "t"),
-            [
-                ("r'", "s", "t"),
-                ("r", "s'", "t")
-            ]
-        )
-    ],
+    # "rstu_2_full": [
+    #     (
+    #         "u",
+    #         ("r", "s", "t"),
+    #         [
+    #             ("r",),
+    #             ("s",),
+    #             ("t",),
+    #             ("r", "s"),
+    #             ("s", "r"),
+    #             ("r", "t"),
+    #             ("t", "r"),
+    #             ("s", "t"),
+    #             ("t", "s"),
+    #             ("r", "t", "s"),
+    #             ("s", "r", "t"),
+    #             ("s", "t", "r"),
+    #             ("t", "s", "r"),
+    #             ("t", "r", "s")
+    #         ]
+    #     ),
+    #     (
+    #         "u",
+    #         ("r'", "s'", "t"),
+    #         [
+    #             ("r'", "s", "t"),
+    #             ("r", "s'", "t")
+    #         ]
+    #     )
+    # ],
     # "rrst": [
     #     ("t", ("r", "r", "s"), [ ("s",), ("s", "r") ]),
     #     ("t", ("r", "s"), [ ("s",), ("s", "r") ])
     # ],
-    # "rrst_full": [
-    #     (
-    #         "t",
-    #         ("r", "r", "s"),
-    #         [
-    #             ("s",),
-    #             ("s", "r"),
-    #             ("s", "s", "r"),
-    #             ("s", "r", "r"),
-    #             ("r", "s", "r"),
-    #             ("r", "r", "r", "s")
-    #         ]
-    #     ),
-    #     (
-    #         "t",
-    #         ("r", "s"),
-    #         [
-    #             ("s",),
-    #             ("s", "r"),
-    #             ("s", "s", "r"),
-    #             ("s", "r", "r"),
-    #             ("r", "s", "r"),
-    #             ("r", "r", "r", "s")
-    #         ]
-    #     )
-    # ]
+    "rrst_full": [
+        (
+            "t",
+            ("r", "r", "s"),
+            [
+                ("s",),
+                ("s", "r"),
+                ("s", "s", "r"),
+                ("s", "r", "r"),
+                ("r", "s", "r"),
+                ("r", "r", "r", "s")
+            ]
+        ),
+        (
+            "t",
+            ("r", "s"),
+            [
+                ("s",),
+                ("s", "r"),
+                ("s", "s", "r"),
+                ("s", "r", "r"),
+                ("r", "s", "r"),
+                ("r", "r", "r", "s")
+            ]
+        )
+    ]
 }
 
 nb_runs = 1

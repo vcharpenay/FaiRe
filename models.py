@@ -2,6 +2,7 @@ from collections.abc import Sequence
 
 from torch import tensor, prod, cat, where, FloatTensor
 from torch.linalg import vector_norm
+from torch.nn.functional import relu, gelu, leaky_relu, softplus
 from torch.nn.init import xavier_uniform_, uniform_, normal_
 
 from pykeen.nn import Embedding
@@ -50,6 +51,11 @@ class NormInteraction(Interaction):
 
         cu, cv, cx, cy = c.tensor_split(4, dim=-2)
         au, av, ax, ay = a.tensor_split(4, dim=-2)
+
+        # au = 0.25
+        # av = 0.25
+        # ax = 0.25
+        # ay = 0.25
 
         u = (h - t).unsqueeze(-2)
         v = (h + t).unsqueeze(-2)
@@ -276,6 +282,111 @@ class SModel(ERModel):
 
         self.name = scales + "_scale"
 
+class SWInteraction(Interaction):
+
+    def __init__(
+            self,
+            *,
+            scales = "x",
+    ):
+        super().__init__()
+
+        self.entity_shape = ("d",)
+        self.relation_shape = (("e", "d"), ("e", "d"), ("e", "d"))
+
+        self.scales = scales
+
+    def forward(self, h, r, t):
+        s, w, u = r
+
+        sx, sy = s.tensor_split(2, dim=-2)
+        wx, wy = w.tensor_split(2, dim=-2)
+        ux, uy = u.tensor_split(2, dim=-2)
+
+        x = h.unsqueeze(-2)
+        y = t.unsqueeze(-2)
+
+        # dist_x = relu((sx * x + y - ux).abs() - wx)
+        # dist_y = relu((sy * y + x - uy).abs() - wy)
+
+        # # TODO zero-grad doesn't help while training...
+
+        # dist_cat = []
+        # if "x" in self.scales: dist_cat.append(dist_x)
+        # if "y" in self.scales: dist_cat.append(dist_y)
+
+        # dist = cat(dist_cat, dim=-1).squeeze(-2)
+
+        # return (1 - vector_norm(dist, dim=-1)).sigmoid()
+
+        dist_x = leaky_relu((sx * x + y - ux).abs() - wx)
+        dist_y = leaky_relu((sy * y + x - uy).abs() - wy)
+
+        dist_cat = []
+        if "x" in self.scales: dist_cat.append(dist_x)
+        if "y" in self.scales: dist_cat.append(dist_y)
+
+        dist = cat(dist_cat, dim=-1).squeeze(-2)
+
+        return (1 - dist.sum(dim=-1)).sigmoid()
+    
+    def filter(self, scales, a):
+        if "x" not in scales: a[...,0,:] = float("-inf")
+        if "y" not in scales: a[...,1,:] = float("-inf")
+
+        return a
+
+class SWModel(ERModel):
+
+    def __init__(
+        self,
+        *,
+        embedding_dim: int = 40,
+        r_pretrained: Sequence[Embedding] = None,
+        scales: int = "x",
+        n: int = 2,
+        constraints: str = "uvxy",
+        **kwargs
+    ) -> None:
+        e_kwargs = dict(
+            embedding_dim=embedding_dim,
+            initializer=xavier_uniform_
+        )
+
+        r_kwargs = [
+            dict( # scale
+                shape=(2, embedding_dim),
+                initializer=xavier_uniform_
+            ),
+            dict( # width
+                shape=(2, embedding_dim),
+                initializer=xavier_uniform_
+            ),
+            dict( # offset
+                shape=(2, embedding_dim),
+                # FIXME init should be per component
+                initializer=xavier_uniform_
+            ),
+        ]
+
+        if r_pretrained:
+            for args, rr in zip(r_kwargs, r_pretrained):
+                args["initializer"] = PretrainedInitializer(rr())
+
+        super().__init__(
+            interaction=SWInteraction,
+            interaction_kwargs=dict(
+                scales=scales,
+            ),
+            entity_representations=Embedding,
+            entity_representations_kwargs=e_kwargs,
+            relation_representations=Embedding,
+            relation_representations_kwargs=r_kwargs,
+            **kwargs
+        )
+
+        self.name = scales + "w_scale"
+
 class PolygonInteraction(Interaction):
 
     def __init__(
@@ -289,18 +400,22 @@ class PolygonInteraction(Interaction):
     def forward(self, h, r, t):
         s, u = r
 
+        sx, sy = s.tensor_split(2, dim=-2)
+        ux, uy = u.tensor_split(2, dim=-2)
+
         x = h.unsqueeze(-2)
         y = t.unsqueeze(-2)
 
-        dist = s * x + y - u
+        # dist_x = relu(sx * x + y - ux)
+        # dist_y = relu(sy * y + x - uy)
 
-        dist_up, dist_down = dist.tensor_split(2, dim=-2)
-        dist_cat = cat((dist_up, -dist_down), dim=-2)
+        dist_x = leaky_relu(sx * x + y - ux)
+        dist_y = leaky_relu(sy * y + x - uy)
 
-        score = dist_cat.tanh().mean(dim=-2)
-        score = where(score > 0, score, 0) # ReLU (try GELU?)
+        # dist = cat((dist_x, dist_y), dim=-1).squeeze(-2)
+        dist = cat((dist_x, dist_y), dim=-2).sum(dim=-2)
 
-        return score.mean(dim=-1)
+        return (1 - dist.sum(dim=-1)).sigmoid()
 
 class PolygonModel(ERModel):
     
@@ -323,8 +438,9 @@ class PolygonModel(ERModel):
         r_kwargs = [
             dict( # scale
                 shape=(2 * edges, embedding_dim),
-                initializer=uniform_,
-                initializer_kwargs=dict(a=-1, b=1)
+                # initializer=uniform_,
+                # initializer_kwargs=dict(a=-1, b=1)
+                initializer=xavier_uniform_
             ),
             dict( # offset
                 shape=(2 * edges, embedding_dim),
@@ -361,10 +477,31 @@ class FFNInteraction(Interaction):
     def forward(self, h, r, t):
         w1, w2, b1 = r
 
-        ht = cat((h, t), dim=-1)
-        score = (w1 @ ht + b1).maximum(0) @ w2
+        # if h.size(0) == 1:
+        #     h = h.tile((t.size(0), 1, 1))
+        #     t = t.tile((1, h.size(1), 1))
+        # if t.size(0) == 1:
+        #     t = t.tile((h.size(0), 1, 1))
+        #     h = h.tile((1, t.size(1), 1))
 
-        return score
+        # ht = cat((h, t), dim=-1).unsqueeze(-2)
+        
+        # l1 = ht @ w1 + b1.unsqueeze(-2)
+
+        ###
+
+        h = h.unsqueeze(-2)
+        t = t.unsqueeze(-2)
+
+        wh1, wt1 = w1.tensor_split(2, dim=-2)
+        # same as cat((h, t)) @ w1 + b1
+        l1 = h @ wh1 + t @ wt1 + b1.unsqueeze(-2)
+
+        ###
+
+        score = where(l1 > 0, l1, 0) @ w2
+
+        return score.squeeze(-2).sigmoid()
 
 class FFNModel(ERModel):
 

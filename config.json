@@ -3,7 +3,7 @@
     "pipeline": {
         "model_kwargs": {
             "embedding_dim": 10,
-            "constraints": "v",
+            "constraints": "uvxy",
             "n": 1,
             "scales": "xy"
         },
@@ -22,11 +22,11 @@
             "patience": 3,
             "relative_delta": 0.005,
             "frequency": 10,
-            "metric": "hits_at_1"
+            "metric": "inverse_harmonic_mean_rank"
         },
         "optimizer": "Adam",
         "optimizer_kwargs": {
-            "lr": 0.1
+            "lr": 1e-1
         }
     }
 }
