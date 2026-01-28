@@ -1,13 +1,12 @@
 from json import load
 from datetime import datetime
+from random import sample
 
 from pykeen.pipeline import pipeline_from_config, PipelineResult
-from pykeen.evaluation import RankBasedEvaluator
 
-from losses import BCEWithoutSigmoid, AdversarialBCEWithoutSigmoid
-from models import UVXYModel, NormModel, ProductModel, SModel, SWModel, PolygonModel, FFNModel
-from datasets import Grid1, Grid2, Grid3, Grid4, Lines1, Lines2, Lines3, Random1, CLUTTRLike
-from sampling import LocalNegativeSampler
+from losses import AdversarialBCEWithoutSigmoid
+from models import RegionBasedModel
+from datasets import CLUTTRLike, TEMPLATES
 
 def save_xy(run, m, ds_name, split):
     e_emb = m.entity_representations[0]()
@@ -31,113 +30,35 @@ def save_r(run, m, ds_name, split):
             f.write("\n\n")
 
 models = (
-    # NormModel,
-    # ProductModel,
-    # SModel,
-    # SWModel,
-    PolygonModel,
-    # FFNModel,
+    # SOTA
+    dict(edges = 1, scales = [-1]), # TransE
+    dict(edges = 4, scales = [-1, 0, 1, 0]), # Octagons
+    dict(edges = 2), # ExpressivE
+    
+    # Polygons
+    dict(edges = 2, symmetric = False),
+    dict(edges = 4, symmetric = False),
+    dict(edges = 6, symmetric = False),
 )
 
-datasets = (
-    # Grid1,
-    # Grid2,
-    # Grid3,
-    # Grid4,
-    # Lines1,
-    # Lines2,
-    # Lines3,
-    # Random1,
-)
-
-templates = {
-    # "rst": [
-    #     ("t", ("r", "s"), [ ("s", "r") ])
-    # ],
-    # "rstu_1": [
-    #     ("u", ("r", "s", "t"), [ ("t", "r", "s") ]),
-    #     ("u", ("r'", "s'", "t"), [ ("t", "r'", "s'") ])
-    # ],
-    # "rstu_2": [
-    #     ("u", ("r", "s", "t"), [ ("t", "s", "r") ]),
-    #     ("u", ("r'", "s'", "t"), [ ("t", "s'", "r'") ])
-    # ],
-    # "rstu_2_full": [
-    #     (
-    #         "u",
-    #         ("r", "s", "t"),
-    #         [
-    #             ("r",),
-    #             ("s",),
-    #             ("t",),
-    #             ("r", "s"),
-    #             ("s", "r"),
-    #             ("r", "t"),
-    #             ("t", "r"),
-    #             ("s", "t"),
-    #             ("t", "s"),
-    #             ("r", "t", "s"),
-    #             ("s", "r", "t"),
-    #             ("s", "t", "r"),
-    #             ("t", "s", "r"),
-    #             ("t", "r", "s")
-    #         ]
-    #     ),
-    #     (
-    #         "u",
-    #         ("r'", "s'", "t"),
-    #         [
-    #             ("r'", "s", "t"),
-    #             ("r", "s'", "t")
-    #         ]
-    #     )
-    # ],
-    # "rrst": [
-    #     ("t", ("r", "r", "s"), [ ("s",), ("s", "r") ]),
-    #     ("t", ("r", "s"), [ ("s",), ("s", "r") ])
-    # ],
-    "rrst_full": [
-        (
-            "t",
-            ("r", "r", "s"),
-            [
-                ("s",),
-                ("s", "r"),
-                ("s", "s", "r"),
-                ("s", "r", "r"),
-                ("r", "s", "r"),
-                ("r", "r", "r", "s")
-            ]
-        ),
-        (
-            "t",
-            ("r", "s"),
-            [
-                ("s",),
-                ("s", "r"),
-                ("s", "s", "r"),
-                ("s", "r", "r"),
-                ("r", "s", "r"),
-                ("r", "r", "r", "s")
-            ]
-        )
-    ]
-}
-
-nb_runs = 1
+# nb_runs = 1
 # nb_runs = 3
+nb_runs = 5
 
 for run in range(nb_runs):
     with open("results.tsv", "a") as f:
         f.write(f"\n\n# {datetime.now().isoformat()} (run #{run})\n")
 
-    for m_cls in models:
-        for ds_name, template_def in templates.items():
+    for m_config in models:
+        for ds_name, template_def in TEMPLATES.items():
             with open("config.json") as f: config = load(f)
 
             config["pipeline"]["loss"] = AdversarialBCEWithoutSigmoid
-            config["pipeline"]["model"] = m_cls
+            config["pipeline"]["model"] = RegionBasedModel
 
+            config["pipeline"]["model_kwargs"] |= m_config
+
+            # TODO LCWA on GPUs
             # config["pipeline"]["negative_sampler"] = LocalNegativeSampler
 
             ds = CLUTTRLike(
@@ -145,21 +66,24 @@ for run in range(nb_runs):
                 create_inverse_triples=False
             )
 
-            # TODO validation on a small subset / on inferrable triples?
+            num_triples = ds.training.num_triples
+            indices = sample(range(num_triples), int(0.1 * num_triples))
+            training_sample = ds.training.clone_and_exchange_triples(
+                ds.training.mapped_triples[indices]
+            )
+
             config["pipeline"]["training"] = ds.training
-            config["pipeline"]["validation"] = ds.training
-            config["pipeline"]["testing"] = ds.training
+            config["pipeline"]["validation"] = training_sample
+            config["pipeline"]["testing"] = training_sample
 
             result: PipelineResult = pipeline_from_config(config)
 
             save_xy(run, result.model, ds_name, "train")
             save_r(run, result.model, ds_name, "train")
 
-            # FIXME configs for scale/uvxy are mutually exclusive
-
             margs = config["pipeline"]["model_kwargs"]
 
-            m_inf = m_cls(
+            m_inf = RegionBasedModel(
                 triples_factory=ds.inference,
                 r_pretrained=result.model.relation_representations,
                 loss=AdversarialBCEWithoutSigmoid,
@@ -185,8 +109,6 @@ for run in range(nb_runs):
             hits_at_1 = result.get_metric("both.realistic.hits_at_1")
             hits_at_3 = result.get_metric("both.realistic.hits_at_3")
             hits_at_10 = result.get_metric("both.realistic.hits_at_10")
-
-            # note: validation on "inverse_harmonic_mean_rank"?
 
             with open("results.tsv", "a") as f:
                 f.write(f"{ds_name}\t{result.model.name}\t{hits_at_1:.3f}\t{hits_at_3:.3f}\t{hits_at_10:.3f}\n")

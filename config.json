@@ -2,10 +2,7 @@
     "metadata": {},
     "pipeline": {
         "model_kwargs": {
-            "embedding_dim": 10,
-            "constraints": "uvxy",
-            "n": 1,
-            "scales": "xy"
+            "embedding_dim": 10
         },
         "negative_sampler_kwargs": {
             "num_negs_per_pos": 10
