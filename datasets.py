@@ -127,6 +127,10 @@ class CLUTTRLike:
             all_rels |= set(comp_tpl)
             for d_tpl in distractors: all_rels |= set(d_tpl)
 
+        # ensure reproducibility
+        all_rels = list(all_rels)
+        all_rels.sort()
+
         return { rel: i for i, rel in enumerate(all_rels) }
     
     def _build_triples(self, rel, counter, start_entity, template):

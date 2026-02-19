@@ -71,7 +71,7 @@ class EdgeInteraction(Interaction):
         return (1 - vector_norm(dist, dim=-1)).sigmoid()
     
     def f(self, a, dist):
-        x = relu(dist) + (relu(-dist) if self.symmetric else 0)
+        x = relu(dist) if self.symmetric else dist.abs()
 
         return a * x
 

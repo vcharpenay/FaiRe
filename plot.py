@@ -3,9 +3,10 @@ from matplotlib.pyplot import subplots
 
 from datasets import TEMPLATES
 
-# nb_runs = 1
+nb_runs = 1
 # nb_runs = 3
-nb_runs = 5
+# nb_runs = 5
+# nb_runs = 20
 
 nb_instances = 50
 

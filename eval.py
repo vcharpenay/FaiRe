@@ -8,15 +8,21 @@ from losses import AdversarialBCEWithoutSigmoid
 from models import RegionBasedModel
 from datasets import CLUTTRLike, TEMPLATES
 
-def save_xy(run, m, ds_name, split):
-    e_emb = m.entity_representations[0]()
+def save_ranks(run: int, m: RegionBasedModel, ds: CLUTTRLike, ds_name: str, split: str):
+    triples = ds.test.mapped_triples
 
-    if e_emb.size(-1) == 2:
-        with open(f"xy_{ds_name}_{m.name}.{split}.{run}.tsv", "w") as f:
-            for e in e_emb:
-                x = e[0]
-                y = e[1]
-                f.write(f"{x:.3f}\t{y:.3f}\n")
+    queries = triples[:,0:2]
+    answers = triples[:,2]
+
+    scores = m.score_t(queries)
+    ranks = scores.argsort(dim=-1, descending=True)
+
+    with open(f"ranks_{ds_name}_{m.name}.{split}.{run}.tsv", "w") as f:
+        for tail, candidates in zip(answers, ranks):
+            top10 = candidates[:10]
+
+            f.write(f"{tail.item()}\t")
+            f.write("\t".join([str(i.item()) for i in top10]) + "\n")
 
 def save_r(run, m, ds_name, split):
     with open(f"r_{ds_name}_{m.name}.{split}.{run}.tsv", "w") as f:
@@ -32,18 +38,18 @@ def save_r(run, m, ds_name, split):
 models = (
     # SOTA
     dict(edges = 1, scales = [-1]), # TransE
-    dict(edges = 4, scales = [-1, 0, 1, 0]), # Octagons
-    dict(edges = 2), # ExpressivE
+    # dict(edges = 4, scales = [-1, 0, 1, 0]), # Octagons
+    # dict(edges = 2), # ExpressivE
     
-    # Polygons
-    dict(edges = 2, symmetric = False),
-    dict(edges = 4, symmetric = False),
-    dict(edges = 6, symmetric = False),
+    # # Polygons
+    # dict(edges = 2, symmetric = False),
+    # dict(edges = 4, symmetric = False),
+    # dict(edges = 6, symmetric = False),
 )
 
-# nb_runs = 1
+nb_runs = 1
 # nb_runs = 3
-nb_runs = 5
+# nb_runs = 5
 
 for run in range(nb_runs):
     with open("results.tsv", "a") as f:
@@ -53,12 +59,13 @@ for run in range(nb_runs):
         for ds_name, template_def in TEMPLATES.items():
             with open("config.json") as f: config = load(f)
 
+            # config["pipeline"]["training_loop"] = "LCWA"
+
             config["pipeline"]["loss"] = AdversarialBCEWithoutSigmoid
             config["pipeline"]["model"] = RegionBasedModel
 
             config["pipeline"]["model_kwargs"] |= m_config
 
-            # TODO LCWA on GPUs
             # config["pipeline"]["negative_sampler"] = LocalNegativeSampler
 
             ds = CLUTTRLike(
@@ -78,7 +85,7 @@ for run in range(nb_runs):
 
             result: PipelineResult = pipeline_from_config(config)
 
-            save_xy(run, result.model, ds_name, "train")
+            save_ranks(run, result.model, ds, ds_name, "train")
             save_r(run, result.model, ds_name, "train")
 
             margs = config["pipeline"]["model_kwargs"]
@@ -101,7 +108,7 @@ for run in range(nb_runs):
 
             result: PipelineResult = pipeline_from_config(config)
 
-            save_xy(run, result.model, ds_name, "inf")
+            save_ranks(run, result.model, ds, ds_name, "inf")
             save_r(run, result.model, ds_name, "inf")
 
             # results on true triples
