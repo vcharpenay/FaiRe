@@ -1,11 +1,13 @@
+from math import sqrt
+from statistics import mean, stdev
 from pandas import read_csv
 from matplotlib.pyplot import subplots
 
 from datasets import TEMPLATES
 
-nb_runs = 1
+# nb_runs = 1
 # nb_runs = 3
-# nb_runs = 5
+nb_runs = 5
 # nb_runs = 20
 
 nb_instances = 50
@@ -71,13 +73,19 @@ for ds, tpl in TEMPLATES.items():
             p = sum(precision_per_series) / len(tpl)
             precision_per_run.append(p)
 
-        p_avg = sum(precision_per_run) / len(precision_per_run)
+        p_avg = mean(precision_per_run)
+        precision_per_model.append(p_avg)
+
         p_min = min(precision_per_run)
         p_max = max(precision_per_run)
-
-        precision_per_model.append(p_avg)
-        min_precision_per_model.append(p_avg - p_min)
-        max_precision_per_model.append(p_max - p_avg)
+        
+        if nb_runs > 1:
+            p_stdev = stdev(precision_per_run)
+            min_precision_per_model.append(p_stdev)
+            max_precision_per_model.append(p_stdev)
+        else:
+            min_precision_per_model.append(p_avg - p_min)
+            max_precision_per_model.append(p_max - p_avg)
 
         ds_name = ds_mapping[ds]
         m_name = model_names[m_i]

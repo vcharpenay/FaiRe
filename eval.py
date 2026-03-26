@@ -2,6 +2,7 @@ from json import load
 from datetime import datetime
 from random import sample
 
+from torch import save
 from pykeen.pipeline import pipeline_from_config, PipelineResult
 
 from losses import AdversarialBCEWithoutSigmoid
@@ -24,27 +25,19 @@ def save_ranks(run: int, m: RegionBasedModel, ds: CLUTTRLike, ds_name: str, spli
             f.write(f"{tail.item()}\t")
             f.write("\t".join([str(i.item()) for i in top10]) + "\n")
 
-def save_r(run, m, ds_name, split):
-    with open(f"r_{ds_name}_{m.name}.{split}.{run}.tsv", "w") as f:
-        for rr in m.relation_representations:
-            r_emb = rr()
-
-            for r in r_emb:
-                vec = r.reshape(-1)
-                f.write("\t".join([str(i.item()) for i in vec]) + "\n")
-
-            f.write("\n\n")
+def save_model(run, m, ds_name, split):
+    save(m.state_dict(), f"m_{ds_name}_{m.name}.{split}.{run}.pth")
 
 models = (
     # SOTA
-    dict(edges = 1, scales = [-1]), # TransE
-    # dict(edges = 4, scales = [-1, 0, 1, 0]), # Octagons
-    # dict(edges = 2), # ExpressivE
+    # dict(edges = 1, scales = [-1], widths = [0]), # TransE
+    # dict(edges = 4, scales = [-1, 0, 1, 0], widths = [0, 0, 0, 0]), # Octagons
+    # dict(edges = 2, widths = [0, 0]), # ExpressivE
     
     # # Polygons
-    # dict(edges = 2, symmetric = False),
-    # dict(edges = 4, symmetric = False),
-    # dict(edges = 6, symmetric = False),
+    # dict(edges = 2, symmetric = False, widths = [ 0, 0 ]),
+    dict(edges = 4, symmetric = False, widths = [ 0, 0, 0, 0 ]),
+    # dict(edges = 6, symmetric = False, widths = [ 0, 0, 0, 0, 0, 0 ]),
 )
 
 nb_runs = 1
@@ -86,7 +79,7 @@ for run in range(nb_runs):
             result: PipelineResult = pipeline_from_config(config)
 
             save_ranks(run, result.model, ds, ds_name, "train")
-            save_r(run, result.model, ds_name, "train")
+            save_model(run, result.model, ds_name, "train")
 
             margs = config["pipeline"]["model_kwargs"]
 
@@ -109,7 +102,7 @@ for run in range(nb_runs):
             result: PipelineResult = pipeline_from_config(config)
 
             save_ranks(run, result.model, ds, ds_name, "inf")
-            save_r(run, result.model, ds_name, "inf")
+            save_model(run, result.model, ds_name, "inf")
 
             # results on true triples
 
