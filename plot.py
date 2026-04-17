@@ -7,8 +7,8 @@ from datasets import TEMPLATES
 
 # nb_runs = 1
 # nb_runs = 3
-nb_runs = 5
-# nb_runs = 20
+# nb_runs = 5
+nb_runs = 20
 
 nb_instances = 50
 
@@ -18,7 +18,9 @@ models = [
     "2_sym_model",
     "2_model",
     "4_model",
-    "6_model"
+    "6_model",
+    "8_model",
+    "10_model"
 ]
 
 model_names = [
@@ -27,7 +29,9 @@ model_names = [
     "ExpressivE",
     "Polygons (2)",
     "Polygons (4)",
-    "Polygons (6)"
+    "Polygons (6)",
+    "Polygons (8)",
+    "Polygons (10)"
 ]
 
 ds_mapping = {
@@ -40,7 +44,7 @@ ds_mapping = {
     "r_s_r_t": "Comb"
 }
 
-x_pos = [0, 1, 2, 4, 5, 6] # leave space between polygons and others
+x_pos = [0, 1, 2, 4, 5, 6, 7, 8] # leave space between polygons and others
 
 for ds, tpl in TEMPLATES.items():
     fig, ax = subplots()

@@ -31,13 +31,15 @@ def save_model(run, m, ds_name, split):
 models = (
     # SOTA
     # dict(edges = 1, scales = [-1], widths = [0]), # TransE
-    # dict(edges = 4, scales = [-1, 0, 1, 0], widths = [0, 0, 0, 0]), # Octagons
-    # dict(edges = 2, widths = [0, 0]), # ExpressivE
+    # dict(edges = 4, scales = [1, 0, 1, 0], widths = [0, 0, 0, 0], attention_scores = [1, 1, 1, 1]), # Octagons
+    # dict(edges = 2, widths = [0, 0], attention_scores = [1, 1]), # ExpressivE
     
     # # Polygons
-    # dict(edges = 2, symmetric = False, widths = [ 0, 0 ]),
-    dict(edges = 4, symmetric = False, widths = [ 0, 0, 0, 0 ]),
-    # dict(edges = 6, symmetric = False, widths = [ 0, 0, 0, 0, 0, 0 ]),
+    # dict(edges = 2, symmetric = False, widths = [ 0, 0 ], attention_scores = [1, 1]),
+    # dict(edges = 4, symmetric = False, widths = [ 0, 0, 0, 0 ], attention_scores = [1, 1, 1, 1]),
+    # dict(edges = 6, symmetric = False, widths = [ 0, 0, 0, 0, 0, 0 ], attention_scores = [1, 1, 1, 1, 1, 1]),
+    dict(edges = 8, symmetric = False, widths = [ 0, 0, 0, 0, 0, 0, 0, 0 ], attention_scores = [1, 1, 1, 1, 1, 1, 1, 1]),
+    dict(edges = 10, symmetric = False, widths = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ], attention_scores = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
 )
 
 nb_runs = 1

@@ -8,7 +8,7 @@
             "num_negs_per_pos": 10
         },
         "training_kwargs": {
-            "num_epochs": 1000,
+            "num_epochs": 500,
             "batch_size": 512
         },
         "training_loop_kwargs": {
@@ -16,9 +16,9 @@
         },
         "stopper": "early",
         "stopper_kwargs": {
-            "patience": 3,
+            "patience": 10,
             "relative_delta": 0.005,
-            "frequency": 10,
+            "frequency": 5,
             "metric": "inverse_harmonic_mean_rank"
         },
         "optimizer": "Adam",

@@ -54,7 +54,20 @@ class EdgeInteraction(Interaction):
         x = h.unsqueeze(-2)
         y = t.unsqueeze(-2)
 
-        if a.size(-2) > 1:
+        if a.size(-2) >= 4:
+            s1, s2, s3, s4 = s.tensor_split(4, dim=-2)
+            u1, u2, u3, u4 = u.tensor_split(4, dim=-2)
+            w1, w2, w3, w4 = w.tensor_split(4, dim=-2)
+            a1, a2, a3, a4 = a.tensor_split(4, dim=-2)
+
+            dist_1 = self.f(a1, w1, s1 * x - y - u1)
+            dist_2 = self.f(a2, w2, s2 * y - x - u2)
+            dist_3 = self.f(a3, w3, s3 * x + y - u3)
+            dist_4 = self.f(a4, w4, s4 * y + x - u4)
+
+            # TODO reshape instead of summing?
+            dist = cat((dist_1, dist_2, dist_3, dist_4), dim=-2).sum(dim=-2)
+        elif a.size(-2) >= 2:
             sx, sy = s.tensor_split(2, dim=-2)
             ux, uy = u.tensor_split(2, dim=-2)
             wx, wy = w.tensor_split(2, dim=-2)
@@ -63,7 +76,6 @@ class EdgeInteraction(Interaction):
             dist_x = self.f(ax, wx, sx * x + y - ux)
             dist_y = self.f(ay, wy, sy * y + x - uy)
 
-            # TODO reshape instead of summing?
             dist = cat((dist_x, dist_y), dim=-2).sum(dim=-2)
         else:
             dist = self.f(a, w, s * x + y - u).squeeze(-2)
@@ -85,8 +97,9 @@ class RegionBasedModel(ERModel):
         margin: float = 1,
         edges: int = 2,
         symmetric: bool = True, # relu(cat(dist, -dist)) ~ abs
-        scales: Sequence[int] = None, # octagon = [-1, 1, 0, 0]
-        widths: Sequence[int] = None,
+        scales: Sequence[float] = None, # octagon = [-1, 1, 0, 0]
+        widths: Sequence[float] = None,
+        attention_scores: Sequence[float] = None,
         **kwargs
     ) -> None:
         e_kwargs = dict(
@@ -122,6 +135,12 @@ class RegionBasedModel(ERModel):
 
             width_kwargs["trainable"] = False
             width_kwargs["initializer"] = FixedValueInitializer(widths)
+
+        if attention_scores is not None:
+            a_kwargs = r_kwargs[3]
+
+            a_kwargs["trainable"] = False
+            a_kwargs["initializer"] = FixedValueInitializer(attention_scores)
 
         if r_pretrained:
             for args, rr in zip(r_kwargs, r_pretrained):
