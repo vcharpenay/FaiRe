@@ -34,16 +34,6 @@ model_names = [
     "Polygons (10)"
 ]
 
-ds_mapping = {
-    "r_s_t": "Perm2",
-    "r_s_t_u": "Perm3",
-    "r1_s1_r2_s2_t": "Mix2",
-    "r1_r2_s_t1_t2_u": "Mix3",
-    "r_r_s_t": "Rep12",
-    "r_r_r_s_t": "Rep13",
-    "r_s_r_t": "Comb"
-}
-
 x_pos = [0, 1, 2, 4, 5, 6, 7, 8] # leave space between polygons and others
 
 for ds, tpl in TEMPLATES.items():
@@ -91,9 +81,8 @@ for ds, tpl in TEMPLATES.items():
             min_precision_per_model.append(p_avg - p_min)
             max_precision_per_model.append(p_max - p_avg)
 
-        ds_name = ds_mapping[ds]
         m_name = model_names[m_i]
-        print(f"{ds_name}\t{m_name}\t{p_avg:.3f}\t{p_min:.3f}\t{p_max:.3f}")
+        print(f"{ds}\t{m_name}\t{p_avg:.3f}\t{p_min:.3f}\t{p_max:.3f}")
 
     err = [min_precision_per_model, max_precision_per_model]
 
@@ -101,9 +90,7 @@ for ds, tpl in TEMPLATES.items():
     ax.set_xticks(x_pos, labels=model_names, rotation=30, ha="right", rotation_mode="anchor")
     ax.set_ybound(0, 1)
     ax.set_ylabel('hits@1')
-    ax.set_title(ds_mapping[ds])
+    ax.set_title(ds)
 
     fig.tight_layout()
     fig.savefig(f"plot_{ds}.pdf")
-    
-    # FIXME dataset names should be aligned with template names
